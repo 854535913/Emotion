@@ -7,7 +7,7 @@ import numpy as np
 import os
 from sklearn import metrics
 
-#new version
+#new version222
 parser=argparse.ArgumentParser() #用于控制参数
 parser.add_argument('--n_epoches_1',type=int,default=5)     #5 120 50
 parser.add_argument('--n_epoches_2', type=int, default=1)
