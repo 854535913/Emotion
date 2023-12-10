@@ -2,6 +2,8 @@ import scipy.io as iso
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+import random
+
 batch_size = 30
 
 class MyDataset(torch.utils.data.Dataset):
@@ -62,13 +64,12 @@ def disorganize_data(dataset_name):  # 打乱数据
         d_arousal_labels[i] = torch.tensor(arousal_labels[index])
     return d_data, d_valence_labels, d_dominance_labels, d_arousal_labels
 
-
-def generate_balanced_samples(sample_num, dataset_name): #平衡样本组，使0/1标签数量平衡
-    #sample_num指的是一个0/1标签的数量，也就是说实际上一个样本组有2*sample_num个样本
+def generate_balanced_samples(sample_num, dataset_name): # 平衡样本组，使0/1标签数量平衡
+    # sample_num指的是一个0/1标签的数量，也就是说实际上一个样本组有2*sample_num个样本
     data, valence_labels, dominance_labels, arousal_labels = load_data(dataset_name)
 
-    temp_data, temp_v_label, temp_d_label, temp_a_label= [], [], [], []
-    counter = 2 * [sample_num]  #计数器[n,n]，收集2种样本各n个
+    temp_data, temp_v_label, temp_d_label, temp_a_label = [], [], [], []
+    counter = 2 * [sample_num]  # 计数器[n,n]，收集2种样本各n个
     i = 0
     while True:
         if len(temp_data) == sample_num * 2:  #目的是采集n*2个样本
@@ -98,12 +99,72 @@ G2: a pair of pic comes from different domain,same class
 G4: a pair of pic comes from different domain, different classes
 """
 
+def generate_groups2(source_name, target_name):
+    # 加载源域和目标域的数据
+    source_data, source_v, source_d, source_a = load_data(source_name)
+    target_data, target_v, target_d, target_a = load_data(target_name)
+
+    # 初始化组和标签列表
+    G1, G2, G3, G4, G5, G6 = [], [], [], [], [], []
+    Lv1, Lv2, Lv3, Lv4, Lv5, Lv6 = [], [], [], [], [], []
+    Ld1, Ld2, Ld3, Ld4, Ld5, Ld6 = [], [], [], [], [], []
+    La1, La2, La3, La4, La5, La6 = [], [], [], [], [], []
+
+    # 遍历所有数据对
+    for i in range(len(source_data)):
+        for j in range(len(target_data)):
+            # 第一组：两个数据都来自源域
+            G1.append([source_data[i], source_data[j]])
+            Lv1.append([source_v[i], source_v[j]])
+            Ld1.append([source_d[i], source_d[j]])
+            La1.append([source_a[i], source_a[j]])
+
+            # 第二组：第一个数据来自源域，第二个来自目标域
+            G2.append([source_data[i], target_data[j]])
+            Lv2.append([source_v[i], target_v[j]])
+            Ld2.append([source_d[i], target_d[j]])
+            La2.append([source_a[i], target_a[j]])
+
+            # 第三组：两个数据都来自目标域
+            G3.append([target_data[i], target_data[j]])
+            Lv3.append([target_v[i], target_v[j]])
+            Ld3.append([target_d[i], target_d[j]])
+            La3.append([target_a[i], target_a[j]])
+
+            # 第四组：第一个数据来自目标域，第二个来自源域
+            G4.append([target_data[i], source_data[j]])
+            Lv4.append([target_v[i], source_v[j]])
+            Ld4.append([target_d[i], source_d[j]])
+            La4.append([target_a[i], source_a[j]])
+
+            # 第五组：数据1来自源域，数据2来自目标域，但数据1和数据2标签不同
+            if source_v[i] != target_v[j]:
+                G5.append([source_data[i], target_data[j]])
+                Lv5.append([source_v[i], target_v[j]])
+                Ld5.append([source_d[i], target_d[j]])
+                La5.append([source_a[i], target_a[j]])
+
+            # 第六组：数据1来自目标域，数据2来自源域，但数据1和数据2标签不同
+            if target_v[i] != source_v[j]:
+                G6.append([target_data[i], source_data[j]])
+                Lv6.append([target_v[i], source_v[j]])
+                Ld6.append([target_d[i], source_d[j]])
+                La6.append([target_a[i], source_a[j]])
+    # 打乱每组数据的顺序
+    for group in [G1, G2, G3, G4, G5, G6]:
+        random.shuffle(group)
+    for labels in [Lv1, Lv2, Lv3, Lv4, Lv5, Lv6, Ld1, Ld2, Ld3, Ld4, Ld5, Ld6, La1, La2, La3, La4, La5, La6]:
+        random.shuffle(labels)
+
+    return (G1, G2, G3, G4, G5, G6), (Lv1, Lv2, Lv3, Lv4, Lv5, Lv6), (Ld1, Ld2, Ld3, Ld4, Ld5, Ld6), (La1, La2, La3, La4, La5, La6)
+
+
 def generate_groups(data_source, label_source, data_target, label_target, seed=1):
     torch.manual_seed(1 + seed)
     torch.cuda.manual_seed(1 + seed)
-    n= data_target.shape[0]   #样本数量
+    n = data_target.shape[0]   # 样本数量
 
-    #打乱
+    # 打乱
     classes = torch.unique(label_target)  #提取label0和1
     classes = classes[torch.randperm(len(classes))]
 
@@ -123,8 +184,8 @@ def generate_groups(data_source, label_source, data_target, label_target, seed=1
     source_matrix = torch.stack(source_idxs)
     target_matrix = torch.stack(target_idxs)
 
-    G1,G2,G3,G4,G5,G6 = [],[],[],[],[],[]
-    L1,L2,L3,L4,L5,L6 = [],[],[],[],[],[]
+    G1, G2, G3, G4, G5, G6 = [],[],[],[],[],[]
+    L1, L2, L3, L4, L5, L6 = [],[],[],[],[],[]
 
 
     for i in range(2):
