@@ -40,11 +40,15 @@ test_dataloader = dataloader.dataloader_maker(t_data)
 
 classifier = muti_model.Classifier()
 encoder = muti_model.Encoder()
-discriminator = valance_model.DCD(input_features=128)
+discriminator_v = muti_model.DCD(input_features=128)
+discriminator_a = muti_model.DCD(input_features=128)
+discriminator_d = muti_model.DCD(input_features=128)
 
 classifier.to(device) #用于GPU运算
 encoder.to(device)
-discriminator.to(device)
+discriminator_v.to(device)
+discriminator_a.to(device)
+discriminator_d.to(device)
 
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(list(encoder.parameters())+list(classifier.parameters()))
@@ -98,52 +102,86 @@ if __name__=='__main__':
 
     # data_source:[2400,128] v_label_source:[2400] data_target:[240,128] v_label_target:[240]
 
-    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=0.001)
+    optimizer_D_v = torch.optim.Adam(discriminator_v.parameters(), lr=0.001)
+    optimizer_D_a = torch.optim.Adam(discriminator_a.parameters(), lr=0.001)
+    optimizer_D_d = torch.optim.Adam(discriminator_d.parameters(), lr=0.001)
 
     for epoch in range(opt['n_epoches_2']):
-        groups, groups_label = dataloader.disorganize_groups(data_source, d_label_source, data_target, d_label_source, seed=epoch)  #组成样本
-        # (groups, groups_pairs):  [(240, 240), (240, 240), (240, 240), (240, 240), (240, 240), (240, 240)]
+        G, Lv, La, Ld = dataloader.generate_groups2(o_data, t_data)
 
-        total_sample_size = 6 * len(groups[1])   # 样本总数:1440
+        total_sample_size = 3 * len(G[1])   # 样本总数:1440
         index_list = torch.randperm(total_sample_size)   # 创建随机索引:[41,50,1,...] (0-total_sample_size)
         mini_batch_size = 30  # 小批量训练
 
         loss_mean = []
         pair_x = []
         pair_y = []
-        group_num_matrix = []
+        group_num_v = []
+        group_num_a = []
+        group_num_d = []
 
         for index in range(total_sample_size):
-            group_num = index_list[index] // len(groups[1]) #group_num记录当前在哪个组
-            x, y = groups[group_num][index_list[index] - len(groups[1]) * group_num] #选择一对样本
+            group_num = index_list[index] // len(G[1]) #group_num记录当前在哪个组
+            x, y = G[group_num][index_list[index] - len(G[1]) * group_num] #选择一对样本
             #print('x1.shape, x2.shape', x1.shape, x2.shape)
             #x1的维度是[128]，对应1s的微分熵数据(128hz)
 
             pair_x.append(x)
             pair_y.append(y)
-            group_num_matrix.append(group_num)
+
+            lv1, lv2 = Lv[group_num][index_list[index] - len(G[1]) * group_num]
+            if lv1 == lv2:
+                group_num_v.append(group_num)
+            else: group_num_v.append(group_num+3)
+
+            la1, la2 = La[group_num][index_list[index] - len(G[1]) * group_num]
+            if la1 == la2:
+                group_num_a.append(group_num)
+            else: group_num_a.append(group_num+3)
+
+            ld1, ld2 = Ld[group_num][index_list[index] - len(G[1]) * group_num]
+            if ld1 == ld2:
+                group_num_d.append(group_num)
+            else: group_num_d.append(group_num+3)
 
             if (index + 1) % mini_batch_size == 0:  #当累积的样本数量达到预定的小批量大小mini_batch_size时开始训练
 
                 pair_x = np.stack(pair_x)    #pair_x:(30, 128)
                 pair_y = np.stack(pair_y)
+                group_num_v = torch.LongTensor(group_num_v)      #鉴别器靠group_num来学习
+                group_num_a = torch.LongTensor(group_num_a)
+                group_num_d = torch.LongTensor(group_num_d)
 
-                group_num_matrix = torch.LongTensor(group_num_matrix)      #鉴别器靠group_num来学习
                 pair_x = torch.tensor(pair_x).to(device)
                 pair_y = torch.tensor(pair_y).to(device)
-                group_num_matrix = group_num_matrix.to(device)
+                group_num_v = group_num_v.to(device)
+                group_num_a = group_num_a.to(device)
+                group_num_d = group_num_d.to(device)
 
-                # 判别器训练
-                optimizer_D.zero_grad()
+                optimizer_D_v.zero_grad()
+                optimizer_D_a.zero_grad()
+                optimizer_D_d.zero_grad()
                 X_cat = torch.cat([encoder(pair_x), encoder(pair_y)], 1)
-                y_pred = discriminator(X_cat.detach())
-                loss = loss_fn(y_pred, group_num_matrix)
-                loss.backward()
-                optimizer_D.step()
-                loss_mean.append(loss.item())
+
+                y_pred_v = discriminator_v(X_cat.detach())
+                loss_v = loss_fn(y_pred_v, group_num_v)
+                y_pred_a = discriminator_a(X_cat.detach())
+                loss_a = loss_fn(y_pred_a, group_num_a)
+                y_pred_d = discriminator_d(X_cat.detach())
+                loss_d = loss_fn(y_pred_d, group_num_d)
+                total_loss = loss_v + loss_a + loss_d
+                total_loss.backward()
+                optimizer_D_v.step()
+                optimizer_D_a.step()
+                optimizer_D_d.step()
+                loss_mean.append(total_loss.item())
+
                 pair_x = [] #清空，为下一个小批量训练做准备
                 pair_y = []
-                group_num_matrix = []
+                group_num_v = []
+                group_num_a = []
+                group_num_d = []
+
 
         print("Epoch %d/%d   loss:%.3f" % (epoch + 1, opt['n_epoches_2'], np.mean(loss_mean)))
 

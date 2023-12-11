@@ -5,6 +5,18 @@ from Models.BasicModule import BasicModule
 use_cuda = True if torch.cuda.is_available() else False
 device = torch.device('cuda:0') if use_cuda else torch.device('cpu')
 
+class DCD(BasicModule):
+    def __init__(self, h_features=64, input_features=128):
+        super(DCD, self).__init__()
+        self.fc1 = nn.Linear(input_features, h_features)
+        self.fc2 = nn.Linear(h_features, h_features)
+        self.fc3 = nn.Linear(h_features, 6)
+
+    def forward(self, inputs):
+        out = F.relu(self.fc1(inputs))
+        out = self.fc2(out)
+        return F.softmax(self.fc3(out), dim=1)
+
 class Classifier(nn.Module):
     def __init__(self, input_features=64):
         super(Classifier, self).__init__()

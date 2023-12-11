@@ -100,63 +100,42 @@ G4: a pair of pic comes from different domain, different classes
 """
 
 def generate_groups2(source_name, target_name):
-    # 加载源域和目标域的数据
-    source_data, source_v, source_d, source_a = load_data(source_name)
-    target_data, target_v, target_d, target_a = load_data(target_name)
+    # 加载源域和目标域数据
+    source_data, source_v, source_a, source_d = load_data(source_name)
+    target_data, target_v, target_a, target_d = load_data(target_name)
 
     # 初始化组和标签列表
-    G1, G2, G3, G4, G5, G6 = [], [], [], [], [], []
-    Lv1, Lv2, Lv3, Lv4, Lv5, Lv6 = [], [], [], [], [], []
-    Ld1, Ld2, Ld3, Ld4, Ld5, Ld6 = [], [], [], [], [], []
-    La1, La2, La3, La4, La5, La6 = [], [], [], [], [], []
+    G1, G2, G3 = [], [], []
+    L1v, L2v, L3v = [], [], []
+    L1a, L2a, L3a = [], [], []
+    L1d, L2d, L3d = [], [], []
 
-    # 遍历所有数据对
-    for i in range(len(source_data)):
-        for j in range(len(target_data)):
-            # 第一组：两个数据都来自源域
-            G1.append([source_data[i], source_data[j]])
-            Lv1.append([source_v[i], source_v[j]])
-            Ld1.append([source_d[i], source_d[j]])
-            La1.append([source_a[i], source_a[j]])
+    # 获取数据长度
+    source_len = len(source_data)
+    index_list = torch.randperm(source_len)
 
-            # 第二组：第一个数据来自源域，第二个来自目标域
-            G2.append([source_data[i], target_data[j]])
-            Lv2.append([source_v[i], target_v[j]])
-            Ld2.append([source_d[i], target_d[j]])
-            La2.append([source_a[i], target_a[j]])
+    for k in range(source_len - 1):
 
-            # 第三组：两个数据都来自目标域
-            G3.append([target_data[i], target_data[j]])
-            Lv3.append([target_v[i], target_v[j]])
-            Ld3.append([target_d[i], target_d[j]])
-            La3.append([target_a[i], target_a[j]])
+        i = index_list[k]
+        # 第一组：两个元素都来自源域
+        G1.append([source_data[i], source_data[i+1]])
+        L1v.append([source_v[i], source_v[i+1]])
+        L1a.append([source_a[i], source_a[i+1]])
+        L1d.append([source_d[i], source_d[i+1]])
 
-            # 第四组：第一个数据来自目标域，第二个来自源域
-            G4.append([target_data[i], source_data[j]])
-            Lv4.append([target_v[i], source_v[j]])
-            Ld4.append([target_d[i], source_d[j]])
-            La4.append([target_a[i], source_a[j]])
+        # 第二组：一个元素来自源域，另一个来自目标域
+        G2.append([source_data[i], target_data[i]])
+        L2v.append([source_v[i], target_v[i]])
+        L2a.append([source_a[i], target_a[i]])
+        L2d.append([source_d[i], target_d[i]])
 
-            # 第五组：数据1来自源域，数据2来自目标域，但数据1和数据2标签不同
-            if source_v[i] != target_v[j]:
-                G5.append([source_data[i], target_data[j]])
-                Lv5.append([source_v[i], target_v[j]])
-                Ld5.append([source_d[i], target_d[j]])
-                La5.append([source_a[i], target_a[j]])
+        # 第三组：两个元素都来自目标域
+        G3.append([target_data[i], target_data[i+1]])
+        L3v.append([target_v[i], target_v[i+1]])
+        L3a.append([target_a[i], target_a[i+1]])
+        L3d.append([target_d[i], target_d[i+1]])
 
-            # 第六组：数据1来自目标域，数据2来自源域，但数据1和数据2标签不同
-            if target_v[i] != source_v[j]:
-                G6.append([target_data[i], source_data[j]])
-                Lv6.append([target_v[i], source_v[j]])
-                Ld6.append([target_d[i], source_d[j]])
-                La6.append([target_a[i], source_a[j]])
-    # 打乱每组数据的顺序
-    for group in [G1, G2, G3, G4, G5, G6]:
-        random.shuffle(group)
-    for labels in [Lv1, Lv2, Lv3, Lv4, Lv5, Lv6, Ld1, Ld2, Ld3, Ld4, Ld5, Ld6, La1, La2, La3, La4, La5, La6]:
-        random.shuffle(labels)
-
-    return (G1, G2, G3, G4, G5, G6), (Lv1, Lv2, Lv3, Lv4, Lv5, Lv6), (Ld1, Ld2, Ld3, Ld4, Ld5, Ld6), (La1, La2, La3, La4, La5, La6)
+    return (G1, G2, G3), (L1v, L2v, L3v), (L1a, L2a, L3a), (L1d, L2d, L3d)
 
 
 def generate_groups(data_source, label_source, data_target, label_target, seed=1):
